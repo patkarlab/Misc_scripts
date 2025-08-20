@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+
+display_help() {
+	echo
+	echo "Usage:"
+	echo "	$0 -s <csv file with sample name and panel name> -l <location of fastq files> -d <date of the run in YYYYMMDD format>"
+	echo "	-s <sample list>		csv file with 2 columns containing sample name and panel name"
+	echo "	-l <fastq location>		location of fastq files"
+	echo "	-d <date of the run>	run date in YYYYMMDD format without space, eg:20250723"
+	echo "	-help					Display this help message and exit"
+	echo "	The input file must be a csv to extract panel names"
+	exit 0
+}
+
+create_links() {
+	output_dir=$1
+	mkdir -p "${output_dir}"
+	while IFS=',' read -r sample panel; do
+		local sample_dir="${fastq_location}"
+		if [[ ! -d "${sample_dir}" ]]; then
+			echo "WARNING: Sample directory not found: $sample_dir"
+			continue
+		fi
+		for fq in `find ${sample_dir} -type f -iname '*.fastq.gz'`; do
+			if [[ -f "$fq" ]]; then
+				ln -sf "$fq" "${output_dir}/"
+			fi
+		done
+	done < "${samples_panels}"
+	echo "FASTQ links created in: ${output_dir}"
+}
+
+transfer_data() {
+	local sample_id=$1
+	local panel_id=$(echo $2 | tr '[:upper:]' '[:lower:]' | sed 's/[-_]/ /g')	# Converting panel name to lowercase and removing - and _
+	local labid=$( echo ${sample_id} | awk 'BEGIN{FS="[, _-]"} {print $1}')		# Extracting the labid
+	local labid_type=$(echo ${labid} | sed -r 's/[[:digit:]]//g')				# Removing the year and the sample number
+	local sample_info=$(echo ${sample_id} | sed -r s/${labid}//g)				# Extracting the info. after labid
+
+	# Check for panel name, write a case statement here for various panel names
+	case $panel_id in
+		"leukemia panel" | "leukemia panel val" | "alp" | "acute leukemia panel")
+		panel_dir="ALP"
+		;;
+		"new acute leukemia panel" | "new alp")
+		panel_dir="NEW_ALP"
+		;;
+		"narsimha" | "amp" | "narasimha" | "nv2 diagnostic")
+		panel_dir="NARSIMHA"
+		;;
+		"narsimha v2" | "nv2" | "narasimha v2")
+		panel_dir="NARSIMHA_V2"
+		;;
+		"whole exome sequencing" | "exome" | "wes")
+		panel_dir="EXOME"
+		;;
+		"aml mrd new")
+		panel_dir="AML_MRD_NEW"
+		;;
+		"tall rna")
+		panel_dir="TALL_RNA"
+		;;
+		"tall dna")
+		panel_dir="TALL_DNA"
+		;;
+		"mips")
+		panel_dir="MIPS"
+		;;
+		"mrd")
+		panel_dir="MRD"
+		;;
+		"srsf2")
+		panel_dir="SRSF2"
+		;;
+		"duplex")
+		panel_dir="DUPLEX"
+		;;
+		"kdm")
+		panel_dir="KDM"
+		;;
+		"npm1")
+		panel_dir="NPM1"
+		;;
+		"cebpa mrd" | "cebpamrd")
+		panel_dir="CEBPA_MRD"
+		;;
+		"clligvh" | "cll igvh")
+		panel_dir="CLLIGVH"
+		;;
+		"npm1mrd" | "npm1 mrd")
+		panel_dir="NPM1MRD"
+		;;
+		"flt3")
+		panel_dir="FLT3"
+		;;
+		"igvh")
+		panel_dir="IGVH"
+		;;
+		"usg")
+		panel_dir="USG"
+		;;
+		"cll" | "cll mips" | "mipscll")
+		panel_dir="CLL"
+		;;
+		"flt3mrd" | "flt3 mrd")
+		panel_dir="FLT3MRD"
+		;;
+		"new mrd panel")
+		panel_dir="NEW_MRD_PANEL"
+		;;
+		"cebpa")
+		panel_dir="CEBPA"
+		;;
+		"lsc")
+		panel_dir="LSC"
+		;;
+		"mips mrd" | "smmips mrd" | "mipsmrd" )
+		panel_dir="MIPS_MRD"
+		;;
+		"aml mrd p2")
+		panel_dir="IDT_MRD"
+		;;
+		"aml mrd v2" | "aloha" | "aml mrd" | "aloha mrd" | "aloha hsp" )
+		panel_dir="NARASIMHA_MRD"	
+		;;
+		"multiple myeloma")
+		panel_dir="MULTIPLE_MYELOMA"
+		;;
+		"cll tp53" | "clltp53" )
+		panel_dir="CLL_TP53"
+		;;
+		"myopool" | "myeloidopool" | "myeloid o pool")
+		panel_dir="MYELOID_POOL"
+		;;
+		"lymphoma")
+		panel_dir="LYMPHOMA"	
+		;;
+		*)
+		echo "could not map the panel name to a directory, ${sample_id} ${panel_id}"
+		exit 1
+	esac
+
+	# Check if the ${sample_id} starts with an alphabet
+	if [[ ${sample_id} =~ ^[[:alpha:]] ]]; then
+		local year=${run_date:0:4}
+		local folder_name=MISCELLANEOUS_${run_date}
+	else
+		# Identifying the sample year
+		local sample_description=$(echo ${labid} | sed -r 's/[0-9]*//g')	# Removing all digits
+		local sample_year=${sample_name:0:2}								# First 2 characters specify the year
+		local sample_number_formatted=$( echo ${labid} | sed -r 's/^[0-9][0-9]//g' | sed -r 's/[^0-9]*//g' | printf "%04d" $(< /dev/stdin) )	# Extracting sample numbers 
+		local year="20${sample_year}"
+		local folder_name="${sample_year}${labid_type}${sample_number_formatted}${sample_info}"
+	fi
+
+	# Check if the sample is from Varanasi
+	if [[ ${labid:2} =~ ^[V] ]];then
+		#echo "Varanasi sample: ${sample_name} ${panel_name} ${sample_year} ${sample_id} ${sample_number_formatted}"
+		local s3_varanasi_folder="VARANASI_${year}/"
+	else
+		#echo "TMC/TMH sample : ${sample_name} ${panel_name} ${sample_year} ${sample_id} ${sample_number_formatted}"
+		local s3_varanasi_folder=""
+	fi
+
+	# Make a folder and move the fastq.gz files here
+	mkdir -p ${folder_name}/${panel_dir}
+	mv ${output_dir}/${sample_id}_*.fastq.gz ${folder_name}/${panel_dir}/
+
+	# Copying the data to respective folders needs to be verified
+	if [ $? -eq 0 ]; then
+		echo "copied ${folder_name} successfully"
+	else
+		echo "copying for ${folder_name} failed"
+		exit 1
+	fi
+
+	echo "${sample_id} ${labid} ${labid_type} ${panel_id} ${folder_name}"
+	# Check if the files are already present at the location
+	# Obtain the files present in the destination directory
+	echo "Listing fastq files at ${s3_addr}${year}/"
+	check_stat=1
+	while [ $check_stat -ne 0 ]; do
+		aws s3 ls ${s3_addr}${year}/ --recursive > ${samples_panels}_s3_files.dat
+		check_stat=$?
+	done
+
+	# Loop through each file in the folder to be transferred, if any one is already present, make a repeat folder
+	for j in `ls ${folder_name}/${panel_dir} | sed "s:${folder_name}/${panel_dir}::g"`
+	do
+		local fastq_file_name=$(basename $j)
+		local folder_path="/${folder_name}/${panel_dir}/$fastq_file_name"
+		if grep "${folder_path}" ${samples_panels}_s3_files.dat ; then
+			local repeat_folder=repeat_`date "+%d%m%y_%H%M%S"`
+			echo "File $fastq_file_name is already present in the destination, moving it to ${folder_name}/${panel_dir}/${repeat_folder}" >> ${samples_panels}.info
+			mkdir -p ${folder_name}/${panel_dir}/${repeat_folder}
+			mv ${folder_name}/${panel_dir}/${sample_id}_*.fastq.gz ${folder_name}/${panel_dir}/${repeat_folder}/
+			break
+		fi
+	done
+
+	# Irrespective of the presence of the folder on s3, it is safe to do a sync instead of mv or cp
+	echo "syncing data to ${s3_addr}${year}/${s3_varanasi_folder}${folder_name}/"
+	aws s3 sync ${folder_name} ${s3_addr}${year}/${s3_varanasi_folder}${folder_name}/
+	while [ $? -ne 0 ]; do
+		aws s3 sync ${folder_name} ${s3_addr}${year}/${s3_varanasi_folder}${folder_name}/
+	done 
+
+	local transferred_files=$(find ${folder_name} -type f,l -iname "*fastq.gz")
+	echo "${transferred_files} synced to ${s3_addr}${year}/${s3_varanasi_folder}${folder_name}/${panel_dir}" >> ${samples_panels}.info
+	rm -r ${folder_name}
+}
+
+if [ $# -eq 0 ]; then
+	echo "No options were specified."
+	display_help
+fi
+
+# Sorting the options
+while getopts "s:l:d:h" opt; do
+	case "${opt}" in
+		s ) samples_panels=$OPTARG ;;
+		l ) fastq_location=$OPTARG ;;
+		d ) run_date=$OPTARG ;;
+		h ) display_help ;;
+		* ) echo "Unknown option: $opt " >&2 ; display_help ;;
+	esac
+done
+shift $((OPTIND -1))	# removes all options processed by getopts, leaving only positional arguments.
+
+# Handle any additional non-option arguments
+if [ $# -gt 0 ]; then
+	for arg in "$@"; do
+		echo "  $arg"
+	done
+	display_help
+fi
+
+# S3 bucket destination address
+s3_addr="s3://hematopath-data/Clinical_NGS_Analysis/01FastqArchival"
+
+# Check if the sample lists and the fastq folder exists
+if [ -s ${samples_panels} ] && [ -d ${fastq_location} ]; then
+	# : # create_links "output_dir"
+	create_links "output_dir"
+else 
+	echo "${samples_panels} and ${fastq_location} should contain values"
+fi
+
+# Checking for the expected no. of fastqs 
+no_of_samples=$(wc -l ${samples_panels} | awk '{print $1}')
+no_of_fastq=$(find ${fastq_location}/ -type f -iname '*.fastq.gz' | grep -v 'Undetermined' | wc -l )	# Removing the undetermined fastq.gz
+expected_no_of_fastq=$(echo "${no_of_samples} * 2" | bc -l )
+
+# Total no. of panels
+no_of_panels=$(cat ${samples_panels} | awk 'BEGIN{FS=","} {print $2}' | sort | uniq )
+echo "Detailed info. is written to ${samples_panels}.info"
+echo "The panels present are ${no_of_panels}" > ${samples_panels}.info
+echo "No. of samples are ${no_of_samples}, no. of fastq files are ${no_of_fastq} " >> ${samples_panels}.info
+
+if [ ${no_of_fastq} -eq ${expected_no_of_fastq} ]; then
+	echo "No. of fastq files in the folder are equal to the samples"
+else
+	echo "WARNING: No. of fastq.gz files in the folder are not equal to the samples, please check!!"
+fi
+
+# Transferring individual samples 
+while IFS=',' read -r sample_name panel_name; do
+	transfer_data ${sample_name} ${panel_name}
+done < "${samples_panels}"

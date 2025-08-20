@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Usage: ./fastq_stats_single_line.sh yourfile.fastq.gz
+
+FILE="$1"
+
+zcat "$FILE" | awk '
+NR % 4 == 2 {
+    reads++;
+    bases += length($0);
+}
+END {
+    printf "Reads: %.2E, Bases: %.2E\n", reads, bases
+}
+'
