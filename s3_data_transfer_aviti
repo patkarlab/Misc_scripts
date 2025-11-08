@@ -237,11 +237,12 @@ fi
 
 # S3 bucket destination address
 s3_addr="s3://hematopath-data/Clinical_NGS_Analysis/01FastqArchival"
+sample_links_dir="output_dir"	# directory to copy the links for all fastq files
 
 # Check if the sample lists and the fastq folder exists
 if [ -s ${samples_panels} ] && [ -d ${fastq_location} ]; then
-	# : # create_links "output_dir"
-	create_links "output_dir"
+	# : # create_links in ${sample_links_dir}
+	create_links ${sample_links_dir}
 else 
 	echo "${samples_panels} and ${fastq_location} should contain values"
 fi
@@ -265,5 +266,8 @@ fi
 
 # Transferring individual samples 
 while IFS=',' read -r sample_name panel_name; do
-	transfer_data ${sample_name} ${panel_name}
+	transfer_data "${sample_name}" "${panel_name}"
 done < "${samples_panels}"
+
+# Remove the sample_links_dir
+rm -r ${sample_links_dir}
