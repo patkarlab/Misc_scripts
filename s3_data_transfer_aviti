@@ -135,6 +135,9 @@ transfer_data() {
 		"lymphoma")
 		panel_dir="LYMPHOMA"	
 		;;
+		"transcriptome")
+		panel_dir="TRANSCRIPTOME"
+		;;
 		*)
 		echo "could not map the panel name to a directory, ${sample_id} ${panel_id}"
 		exit 1

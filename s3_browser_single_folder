@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+SOURCE_PATH=""
+FOLDER_NAME=""
+DESTINATION_PATH=""
+
+# Help
+usage() {
+	cat <<EOF
+Usage:
+  $(basename "$0") --source_path PATH --folder_name NAME --destination_path S3_PATH
+
+Required arguments:
+  --source_path PATH        Path containing FASTQ/BAM files
+  --folder_name NAME        Folder name
+  --destination_path PATH   Destination S3 path (e.g. s3://bucket/path)
+
+Optional:
+  -h, --help                Show this help message and exit
+
+EOF
+}
+
+# Argument parsing
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--source_path)
+			SOURCE_PATH="$2"
+			shift 2
+			;;
+		--folder_name)
+			FOLDER_NAME="$2"
+			shift 2
+			;;
+		--destination_path)
+			DESTINATION_PATH="$2"
+			shift 2
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			echo "ERROR: Unknown argument: $1"
+			echo
+			usage
+			exit 1
+			;;
+	esac
+done
+
+# Validation
+if [[ -z "$SOURCE_PATH" || -z "$FOLDER_NAME" || -z "$DESTINATION_PATH" ]]; then
+	echo "ERROR: --source_path, --folder_name, and --destination_path are required."
+	echo
+	usage
+	exit 1
+fi
+
+if [[ ! -d "$SOURCE_PATH" ]]; then
+	echo "ERROR: Source path does not exist or is not a directory:"
+	echo "  $SOURCE_PATH"
+	exit 1
+fi
+
+# Make a folder for all files to be transferred
+mkdir -p "$FOLDER_NAME"
+
+
+for fq in `find ${SOURCE_PATH} -type f,l \( -iname '*.bam' -o -iname '*.fastq.gz' ! -iname 'Undetermined*' \)`; do
+	if [[ -f "$fq" ]]; then
+		ln -sf "$fq" "${FOLDER_NAME}/"
+	fi
+done
+
+exit_stat=1
+while [ $exit_stat -ne 0 ]; do
+	aws s3 sync ${FOLDER_NAME} ${DESTINATION_PATH}/${FOLDER_NAME}/
+	exit_stat=$?
+done
+echo "`ls ${FOLDER_NAME}/*` synced to ${DESTINATION_PATH}/${FOLDER_NAME}" >> ${FOLDER_NAME}.dat.info
