@@ -79,4 +79,4 @@ while [ $exit_stat -ne 0 ]; do
         exit_stat=$?
 done
 
-echo "`ls ${FOLDER_NAME}/*` synced to ${DESTINATION_PATH}/" >> ${FOLDER_NAME}.dat.info
+echo "`ls ${FOLDER_NAME}/*` synced to ${DESTINATION_PATH}/${FOLDER_NAME}/" >> ${FOLDER_NAME}.dat.info
