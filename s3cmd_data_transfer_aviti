@@ -21,7 +21,7 @@ create_links() {
 			echo "WARNING: Sample directory not found: $sample_dir"
 			continue
 		fi
-		for fq in `find ${sample_dir} -type f -iname '*.fastq.gz'`; do
+		for fq in `find ${sample_dir} -type f,l -iname '*.fastq.gz'`; do
 			if [[ -f "$fq" ]]; then
 				ln -sf "$fq" "${output_dir}/"
 			fi

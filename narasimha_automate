@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# This script will run in the background and check if samples are completely transferred and then initiate the pipeline
+display_help() {
+	echo
+	echo "Usage:"
+	echo "	$0 -s <Absolute path of the sample sheet>"
+	echo "	-s <sample sheet>			Provide samplesheet in aviti format"
+	echo "	-h <print this message>	Display this help message and exit"
+	exit 0
+}
+# Checking for argument variables
+if [ $# -eq 0 ]; then
+	echo "No options were specified."
+	display_help
+fi
+# Sorting the options
+while getopts "p:s:h" opt; do
+	case "${opt}" in
+		s ) samplesheet=$OPTARG ;;
+		h ) display_help ;;
+		* ) echo "Unknown option: $opt" >&2 ; display_help ; exit 1 ;;
+	esac
+done
+
+pipeline_locatn="/home/diagnostics/pipelines/nf-core/rnafusion"
+sequence_locatn="/new_disk/sequences/"
+no_of_samples=$(wc -l < ${samplesheet})
+declare -a non_empty_samples # declare an empty array
+run_nextflow_script="/home/diagnostics/pipelines/nf-core/rnafusion/run_nextflow.sh"
+new_samplesheet="${pipeline_locatn}/samp_`date "+%d%m%y_%H%M%S"`"
+
+# Check for files at the location
+while true; do
+	sample_count=0 
+	for sample in `cat ${samplesheet}`;
+	do
+		# reads per sample
+		mapfile -t reads < <(find ${sequence_locatn} -type f -iname "${sample}_*.fastq.gz" | sed "s:${sequence_locatn}::g")
+		# Check if both reads are present
+		if [[ ${#reads[@]} -eq 2 ]]; then
+			# echo "both reads are present for ${sample}"
+			read1_size1=$(stat -c%s "${sequence_locatn}/${reads[0]}")
+			read2_size1=$(stat -c%s "${sequence_locatn}/${reads[1]}")
+			sleep 5m
+			read1_size2=$(stat -c%s "${sequence_locatn}/${reads[0]}")
+			read2_size2=$(stat -c%s "${sequence_locatn}/${reads[1]}")
+			# Check if the size remains same
+			if [[ ${read1_size2} -ne ${read1_size1} ]] || [[ ${read2_size2} -ne ${read2_size1} ]]; then
+				# echo "read sizes differ for ${sample}"
+				break	# Continue searching for sample reads
+			else
+				# Should no. of reads be counted in both read 1 and read 2 ??
+				sample_count=$((sample_count+1))	# Counting the no. of samples with stable reads
+				# Make a list of samples with fastq.gz size > 25 bytes
+				if [[ ${read1_size2} -gt 25 ]] && [[ ${read2_size2} -gt 25 ]]; then
+					non_empty_samples+=("${sample}")
+				fi
+			fi
+		else
+			echo "reads/sample != 2 for ${sample}"
+			break	# If exactly 2 reads are not found for all of the samples, keep searching !
+		fi
+	done
+
+	if [[ ${sample_count} -eq ${no_of_samples} ]]; then
+		# echo "execute the command"
+		break
+	fi
+	sleep 2m
+done
+
+# Execute the pipeline with new sample sheet
+printf "%s\n" "${non_empty_samples[@]}" > "${new_samplesheet}"
+nohup ${run_nextflow_script} ${new_samplesheet} ${pipeline_locatn}/script.log > ${pipeline_locatn}/run_`date "+%d%m%y_%H%M%S"`.log 2>&1 &
