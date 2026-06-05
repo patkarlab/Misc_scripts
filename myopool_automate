@@ -22,11 +22,11 @@ while getopts "p:s:h" opt; do
 	esac
 done
 
-pipeline_locatn="/home/diagnostics/pipelines/nf-core/rnafusion"
+pipeline_locatn="/home/pipelines/NextSeq_mutation_detector_leukemia"
 sequence_locatn="/new_disk/sequences/"
 no_of_samples=$(wc -l < ${samplesheet})
 declare -a non_empty_samples # declare an empty array
-run_nextflow_script="/home/diagnostics/pipelines/nf-core/rnafusion/run_nextflow.sh"
+run_nextflow_script="/home/pipelines/NextSeq_mutation_detector_leukemia/run_nextflow_bamin.sh"
 new_samplesheet="${pipeline_locatn}/samp_`date "+%d%m%y_%H%M%S"`"
 
 # Check for files at the location
@@ -73,4 +73,4 @@ done
 
 # Execute the pipeline with new sample sheet
 printf "%s\n" "${non_empty_samples[@]}" > "${new_samplesheet}"
-nohup ${run_nextflow_script} ${new_samplesheet} ${pipeline_locatn}/script.log > ${pipeline_locatn}/run_`date "+%d%m%y_%H%M%S"`.log 2>&1 &
+nohup ${run_nextflow_script} ${new_samplesheet} > ${pipeline_locatn}/script_`date "+%d%m%y_%H%M%S"`.log 2>&1 &
