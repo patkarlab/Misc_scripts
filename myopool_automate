@@ -4,7 +4,7 @@ display_help() {
 	echo
 	echo "Usage:"
 	echo "	$0 -s <Absolute path of the sample sheet>"
-	echo "	-s <sample sheet>			Provide samplesheet in aviti format"
+	echo "	-s <sample sheet>			Provide a list of samples"
 	echo "	-h <print this message>	Display this help message and exit"
 	exit 0
 }
@@ -67,8 +67,8 @@ while true; do
 		# echo "execute the command"
 		break
 	fi
-	echo "sleeping for 2 mins at `date "+%d%m%y_%H%M%S"`"
-	sleep 2m
+	echo "sleeping for 5 mins at `date "+%d%m%y_%H%M%S"`"
+	sleep 5m
 done
 
 # Execute the pipeline with new sample sheet

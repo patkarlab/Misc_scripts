@@ -6,19 +6,18 @@ DESTINATION_PATH=""
 
 # Help
 usage() {
-	cat <<EOF
-Usage:
-  $(basename "$0") --source_path PATH --folder_name NAME --destination_path S3_PATH
+	cat <<-EOF
+	Usage:
+		$(basename "$0") --source_path PATH --folder_name NAME --destination_path S3_PATH
 
-Required arguments:
-  --source_path PATH        Path containing FASTQ/BAM files
-  --folder_name NAME        Folder name
-  --destination_path PATH   Destination S3 path (e.g. s3://bucket/path)
+	Required arguments:
+		--source_path PATH        Path containing FASTQ/BAM files
+		--folder_name NAME        Folder name eg: TRANSCRIPTOME_YYYYMMDD
+		--destination_path PATH   Destination S3 path (e.g. s3://bucket/path)
 
-Optional:
-  -h, --help                Show this help message and exit
-
-EOF
+	Optional:
+		-h, --help                Show this help message and exit
+	EOF
 }
 
 # Argument parsing
@@ -68,15 +67,18 @@ mkdir -p "$FOLDER_NAME"
 
 # Search for all fastq.gz or .bam files except those with Undetermined* in their name
 for fq in `find ${SOURCE_PATH} -type f,l \( -iname '*.bam' -o -iname '*.fastq.gz' ! -iname 'Undetermined*' \)`; do
-        if [[ -f "$fq" ]]; then
-                ln -sf "$fq" "${FOLDER_NAME}/"
-        fi
+		if [[ -f "$fq" ]]; then
+			ln -sf "$fq" "${FOLDER_NAME}/"
+		fi
 done
 
 exit_stat=1
 while [ $exit_stat -ne 0 ]; do
-        s3cmd --no-check-certificate --follow-symlinks --signature-v2 sync ${FOLDER_NAME} ${DESTINATION_PATH}/
-        exit_stat=$?
+	# s3cmd --no-check-certificate --follow-symlinks --signature-v2 sync ${FOLDER_NAME} ${DESTINATION_PATH}/
+	export AWS_PROFILE=localS3
+	export S3_ENDPOINT_URL="https://caib-ecs.actrec.gov.in"
+	s5cmd --log info sync ${FOLDER_NAME} ${DESTINATION_PATH}/
+	exit_stat=$?
 done
 
 echo "`ls ${FOLDER_NAME}/*` synced to ${DESTINATION_PATH}/${FOLDER_NAME}/" >> ${FOLDER_NAME}.dat.info

@@ -183,17 +183,20 @@ transfer_data() {
 	echo "Listing fastq files at ${s3_addr}${year}/"
 	check_stat=1
 	while [ $check_stat -ne 0 ]; do
-		s3cmd --no-check-certificate  ls ${s3_addr}${year}/ --recursive > ${samples_panels}_s3_files.dat
+		export AWS_PROFILE=localS3
+		export S3_ENDPOINT_URL="https://caib-ecs.actrec.gov.in"
+		s5cmd ls ${s3_addr}${year}/* > ${samples_panels}_s3_files.dat
 		check_stat=$?
 	done
 
 	# Loop through each file in the folder to be transferred, if any one is already present, make a repeat folder
+	local repeat_folder=""
 	for j in `ls ${folder_name}/${panel_dir} | sed "s:${folder_name}/${panel_dir}::g"`
 	do
 		local fastq_file_name=$(basename $j)
-		local folder_path="/${folder_name}/${panel_dir}/$fastq_file_name"
+		local folder_path="${folder_name}/${panel_dir}/$fastq_file_name"
 		if grep "${folder_path}" ${samples_panels}_s3_files.dat ; then
-			local repeat_folder=repeat_`date "+%d%m%y_%H%M%S"`
+			repeat_folder=repeat_`date "+%d%m%y_%H%M%S"`
 			echo "File $fastq_file_name is already present in the destination, moving it to ${folder_name}/${panel_dir}/${repeat_folder}" >> ${samples_panels}.info
 			mkdir -p ${folder_name}/${panel_dir}/${repeat_folder}
 			mv ${folder_name}/${panel_dir}/${sample_id}_*.fastq.gz ${folder_name}/${panel_dir}/${repeat_folder}/
@@ -202,10 +205,13 @@ transfer_data() {
 	done
 
 	# Irrespective of the presence of the folder on s3, it is safe to do a sync instead of mv or cp
-	echo "syncing data to ${s3_addr}${year}/${s3_varanasi_folder}${folder_name}/"
-	s3cmd --no-check-certificate --follow-symlinks --signature-v2 sync ${folder_name} ${s3_addr}${year}/${s3_varanasi_folder}
-	while [ $? -ne 0 ]; do
-		s3cmd --no-check-certificate --follow-symlinks --signature-v2 sync ${folder_name} ${s3_addr}${year}/${s3_varanasi_folder}
+	echo "syncing data to ${s3_addr}${year}/${s3_varanasi_folder}${folder_name}/${repeat_folder}"
+	exit_stat=1
+	while [ $exit_stat -ne 0 ]; do
+		export AWS_PROFILE=localS3
+		export S3_ENDPOINT_URL="https://caib-ecs.actrec.gov.in"
+		s5cmd sync ${folder_name} ${s3_addr}${year}/${s3_varanasi_folder}
+		exit_stat=$?
 	done 
 
 	local transferred_files=$(find ${folder_name} -type f,l -iname "*fastq.gz")
