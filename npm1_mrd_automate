@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # This script will run in the background and check if samples are completely transferred and then initiate the pipeline
 
-pipeline_locatn="/home/pipelines/NextSeq_mutation_detector_leukemia"
+pipeline_locatn="/home/diagnostics/pipelines/Validation"
 sequence_locatn="/new_disk/sequences/"
-run_nextflow_script="${pipeline_locatn}/run_nextflow_bamin.sh"
+run_nextflow_script="${pipeline_locatn}/run_nextflow_npm1.sh"
 new_samplesheet="${pipeline_locatn}/samp_`date "+%d%m%y_%H%M%S"`"
 declare -i min_file_size=25	# Mininimum file size in bytes
 
@@ -60,7 +60,7 @@ while true; do
 			else
 				# Should no. of reads be counted in both read 1 and read 2 ??
 				sample_count=$((sample_count+1))	# Counting the no. of samples with stable reads
-				# Make a list of samples with fastq.gz size > 25 bytes
+				# Make a list of samples with fastq.gz size > ${min_file_size}
 				if [[ ${read1_size2} -gt ${min_file_size} ]] && [[ ${read2_size2} -gt ${min_file_size} ]]; then
 					non_empty_samples+=("${sample}")
 				fi
@@ -81,4 +81,4 @@ done
 
 # Execute the pipeline with new sample sheet
 printf "%s\n" "${non_empty_samples[@]}" > "${new_samplesheet}"
-nohup ${run_nextflow_script} ${new_samplesheet} > ${pipeline_locatn}/script_`date "+%d%m%y_%H%M%S"`.log 2>&1 &
+nohup ${run_nextflow_script} ${new_samplesheet} > ${pipeline_locatn}/run_`date "+%d%m%y_%H%M%S"`.log 2>&1 &

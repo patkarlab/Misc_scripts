@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # This script will run in the background and check if samples are completely transferred and then initiate the pipeline
+
+pipeline_locatn="/home/pipelines/mutation_detector_nextflow"
+sequence_locatn="/new_disk/sequences/"
+run_nextflow_script="${pipeline_locatn}/run_nextflow.sh"
+new_samplesheet="${pipeline_locatn}/samp_`date "+%d%m%y_%H%M%S"`"
+declare -i min_file_size=25	# Mininimum file size in bytes
+
 display_help() {
 	echo
 	echo "Usage:"
@@ -8,6 +15,12 @@ display_help() {
 	echo "	-h <print this message>	Display this help message and exit"
 	exit 0
 }
+
+file_size_bytes() {
+	local file="$1"
+	stat -c%s "${file}"
+}
+
 # Checking for argument variables
 if [ $# -eq 0 ]; then
 	echo "No options were specified."
@@ -22,15 +35,10 @@ while getopts "p:s:h" opt; do
 	esac
 done
 
-pipeline_locatn="/home/pipelines/mutation_detector_nextflow"
-sequence_locatn="/new_disk/sequences/"
-no_of_samples=$(wc -l < ${samplesheet})
-declare -a non_empty_samples # declare an empty array
-run_nextflow_script="/home/pipelines/mutation_detector_nextflow/run_nextflow.sh"
-new_samplesheet="${pipeline_locatn}/samp_`date "+%d%m%y_%H%M%S"`"
-
 # Check for files at the location
+no_of_samples=$(wc -l < ${samplesheet})
 while true; do
+	declare -a non_empty_samples=()	# declare an empty array
 	sample_count=0 
 	for sample in `cat ${samplesheet}`;
 	do
@@ -39,12 +47,12 @@ while true; do
 		# Check if both reads are present
 		if [[ ${#reads[@]} -eq 2 ]]; then
 			# echo "both reads are present for ${sample}"
-			read1_size1=$(stat -c%s "${sequence_locatn}/${reads[0]}")
-			read2_size1=$(stat -c%s "${sequence_locatn}/${reads[1]}")
+			read1_size1=$(file_size_bytes "${sequence_locatn}/${reads[0]}")
+			read2_size1=$(file_size_bytes "${sequence_locatn}/${reads[1]}")
 			echo "sleeping for 20 sec at `date "+%d%m%y_%H%M%S"`"
 			sleep 20s
-			read1_size2=$(stat -c%s "${sequence_locatn}/${reads[0]}")
-			read2_size2=$(stat -c%s "${sequence_locatn}/${reads[1]}")
+			read1_size2=$(file_size_bytes "${sequence_locatn}/${reads[0]}")
+			read2_size2=$(file_size_bytes "${sequence_locatn}/${reads[1]}")
 			# Check if the size remains same
 			if [[ ${read1_size2} -ne ${read1_size1} ]] || [[ ${read2_size2} -ne ${read2_size1} ]]; then
 				# echo "read sizes differ for ${sample}"
@@ -52,8 +60,8 @@ while true; do
 			else
 				# Should no. of reads be counted in both read 1 and read 2 ??
 				sample_count=$((sample_count+1))	# Counting the no. of samples with stable reads
-				# Make a list of samples with fastq.gz size > 25 bytes
-				if [[ ${read1_size2} -gt 25 ]] && [[ ${read2_size2} -gt 25 ]]; then
+				# Make a list of samples with fastq.gz size > ${min_file_size} bytes
+				if [[ ${read1_size2} -gt ${min_file_size} ]] && [[ ${read2_size2} -gt ${min_file_size} ]]; then
 					non_empty_samples+=("${sample}")
 				fi
 			fi
