@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# This script will check for aviti runs which were recently launched
+
+run_locatn="/samba/aviti/AV244711"
+aviti_machine_name="AV244711"
+
+# listing folders at the run locatn
+mapfile -t folders < <(find ${run_locatn} -mindepth 1 -maxdepth 1 -type d | sed "s:${run_locatn}/::g")
+# echo "${folders[@]}"
+
+# Make an array of only the run directories, ignore all other directories 
+declare -a runs # declare an empty array
+for dirs in "${folders[@]}"; do
+	IFS='_' read -ra directory_details <<< "${dirs}"
+	# The first element of the run name should be a number and the second should be the machine's name
+	if [[ ${directory_details[0]} =~ ^[0-9]+$ ]]  && [[ ${directory_details[1]} == ${aviti_machine_name} ]]; then
+		runs+=("${dirs}")
+	fi
+done
+# echo "${runs[@]}"
+
+# Check if runs have been demultiplexed or set for demultiplexing
+metrics_filename="RunAnalysisFilesUploaded.json"
+for run in "${runs[@]}"; do
+	if [[ ! -f ${run_locatn}/${run}/${metrics_filename} ]]; then
+		# Check if demux_aviti is already launched else launch it
+		if pgrep -af "demux_aviti" | grep -q "${run}"; then 
+			continue
+		else
+			nohup /usr/local/bin/demux_aviti -p ${run_locatn}/${run} -s ${run_locatn}/${run}/RunManifest.csv > ${run_locatn}/run_`date "+%d%m%y_%H%M%S"`.log 2>&1 &
+			echo "executing demux_aviti for ${run_locatn}/${run}"
+		fi
+	fi
+done

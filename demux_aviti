@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# This script will check for completion of an aviti run and start demultiplexing it 
+
+display_help() {
+	echo
+	echo "Usage:"
+	echo "	$0 -p <Absolute path of the run> -s <Absolute path of the sample sheet>"
+	echo "	-p <location of the run>	Provide absoulute path of the aviti run folder"
+	echo "	-s <sample sheet>			Provide samplesheet in aviti format"
+	echo "	-help <print this message>	Display this help message and exit"
+	exit 0
+}
+
+# Checking for argument variables
+if [ $# -eq 0 ]; then
+	echo "No options were specified."
+	display_help
+fi
+
+# Sorting the options
+while getopts "p:s:h" opt; do
+	case "${opt}" in
+		p ) run_folder=$OPTARG ;;
+		s ) samplesheet=$OPTARG ;;
+		h ) display_help ;;
+		* ) echo "Unknown option: $opt" >&2 ; display_help ; exit 1 ;;
+	esac
+done
+
+# Searching for the RunAnalysisFilesUploaded.json
+metrics_filename="RunAnalysisFilesUploaded.json"
+key_name="analysisOutcome"
+completion_value="Completed"
+output_dir="${run_folder}/demux_out_`date "+%d%m%y_%H%M%S"`"
+destination_address="diagnostics@10.100.75.88"
+destination_dir="/new_disk/sequences"
+destination_address2="patkarlab-clinical@10.100.95.23"
+destination_dir2="/scratch/patkarlab-clinical"
+
+while true;
+do
+	json_file=$(find ${run_folder} -iname "${metrics_filename}" | head -n 1)	# Search for the run completion metrics file
+	echo "json file : ${json_file}"
+
+	if [[ -n "${json_file}" ]]; then
+		value=$(jq -r ".${key_name}" "${json_file}" 2>/dev/null)
+		echo "value is : ${value}"
+
+		if [[ "$value" == ${completion_value} ]]; then
+			echo "run complete, starting demultiplexing"
+			bases2fastq ${run_folder} ${output_dir} -r ${samplesheet} --num-threads 16
+			sleep 1m
+
+			echo "copying the fastq files to ${destination_address}"
+			rsync -avh --progress --no-relative --files-from=<(find ${output_dir} -type f,l -iname '*.fastq.gz' -not -iname 'Unassigned*' -printf "%P\n") \
+			${output_dir} ${destination_address}:${destination_dir}
+			sleep 1m
+
+			echo "copying the fastq files to ${destination_address2}"
+			rsync -avh --progress --no-relative --files-from=<(find ${output_dir} -type f,l -iname '*.fastq.gz' -not -iname 'Unassigned*' -printf "%P\n") \
+			${output_dir} ${destination_address2}:${destination_dir2}
+			sleep 1m
+
+			break	# Exit the while loop
+		else
+			echo "waiting for the run to finish"
+		fi
+
+	else
+		echo "json not located"
+	fi
+
+	sleep 1m
+done
