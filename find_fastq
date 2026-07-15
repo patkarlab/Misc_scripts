@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+infile=$1
+
+find ${infile} -type f,l -iname "*.fastq.gz"

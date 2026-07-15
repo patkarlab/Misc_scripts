@@ -51,9 +51,8 @@ do
 			bases2fastq ${run_folder} ${output_dir} -r ${samplesheet} --num-threads 16
 			sleep 1m
 
-			echo "copying the fastq files to ${destination_address}"
-			rsync -avh --progress --no-relative --files-from=<(find ${output_dir} -type f,l -iname '*.fastq.gz' -not -iname 'Unassigned*' -printf "%P\n") \
-			${output_dir} ${destination_address}:${destination_dir}
+			echo "Making links of fastq files to ${destination_dir}"
+			find ${output_dir} -type f -name "*.fastq.gz" -exec ln -s {} ${destination_dir} \;
 			sleep 1m
 
 			echo "copying the fastq files to ${destination_address2}"

@@ -2,7 +2,8 @@
 
 import pandas as pd
 
-gtf_file = "/home/ref_annotation/gencode.v19.annotation.gtf"
+#gtf_file = "/home/ref_annotation/gencode.v19.annotation.gtf"
+gtf_file="path/to/.gtf"
 data = []
 
 with open(gtf_file) as f:
